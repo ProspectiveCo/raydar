@@ -4,24 +4,24 @@ from os.path import abspath, dirname, join
 from threading import Thread
 from traceback import format_exc
 
+import perspective
 from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from perspective import PerspectiveManager, PerspectiveStarletteHandler, Table
+from perspective.handlers.starlette import PerspectiveStarletteHandler
 from pydantic import BaseModel, Field
 from ray.serve import Application, deployment, ingress
 
 
 class PerspectiveRayServerArgs(BaseModel):
     name: str = Field(default="Perspective")
-    manager: str = Field(default_factory=PerspectiveManager)
 
 
-def perspective_thread(manager: PerspectiveManager):
+def perspective_thread():
     from asyncio import new_event_loop
 
     psp_loop = new_event_loop()
-    manager.set_loop_callback(psp_loop.call_soon_threadsafe)
+    perspective.GLOBAL_CLIENT.set_loop_callback(psp_loop.call_soon_threadsafe)
     psp_loop.run_forever()
 
 
@@ -37,18 +37,16 @@ class PerspectiveRayServer:
     def __init__(self, args: PerspectiveRayServerArgs = None):
         logger.setLevel(logging.ERROR)
         args = args or PerspectiveRayServerArgs()
-        self._manager = args.manager
         self._schemas = {}
         self._tables = {}
-        self._psp_thread = Thread(target=perspective_thread, args=(self._manager,), daemon=True)
+        self._psp_thread = Thread(target=perspective_thread, daemon=True)
         self._psp_thread.start()
 
     def new_table(self, tablename: str, schema) -> None:
         if tablename in self._schemas:
             return self._schemas[tablename]
         self._schemas[tablename] = schema
-        self._tables[tablename] = Table(schema)
-        self._manager.host_table(tablename, self._tables[tablename])
+        self._tables[tablename] = perspective.table(schema, name=tablename)
 
     def clear_table(self, tablename: str, schema) -> None:
         if tablename in self._tables:
@@ -60,7 +58,7 @@ class PerspectiveRayServer:
 
     @app.websocket("/ws")
     async def ws(self, ws: WebSocket):
-        handler = PerspectiveStarletteHandler(manager=self._manager, websocket=ws)
+        handler = PerspectiveStarletteHandler(websocket=ws)
         try:
             await handler.run()
         except WebSocketDisconnect:

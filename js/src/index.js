@@ -3,7 +3,7 @@ import "@finos/perspective-viewer";
 import "@finos/perspective-viewer-datagrid";
 import "@finos/perspective-viewer-d3fc";
 import "@finos/perspective-workspace/dist/css/pro.css";
-import "@finos/perspective-viewer/dist/css/themes.css";
+import "@finos/perspective-viewer/dist/css/pro.css";
 import "@finos/perspective-workspace";
 import "./index.css";
 
@@ -11,11 +11,11 @@ function removeTrailingSlash(url) {
   return url.replace(/\/$/, "");
 }
 
-window.addEventListener("load", async () => {
+async function init() {
   const workspace = document.querySelector("perspective-workspace");
   const saveButton = document.getElementById("save-layout-button");
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const websocket = perspective.websocket(
+  const websocket = await perspective.websocket(
     `${protocol}//${window.location.host}${removeTrailingSlash(
       window.location.pathname,
     )}/ws`,
@@ -90,4 +90,6 @@ window.addEventListener("load", async () => {
 
   // update tables every 5s
   setInterval(updateTables, 5000);
-});
+}
+
+init();
